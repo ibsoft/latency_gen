@@ -4,7 +4,9 @@
 command="/bin/ping -q -n -c 3"
 gawk="/usr/bin/gawk"
 rrdtool="/usr/bin/rrdtool"
-
+iface="enp5s0"
+bind=`ifconfig $iface| grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1'`
+log="latency.log"
 
 
 usage() { echo "Usage: $0 [-h <192.168.1.1>] [-d <192.168.1.1.rrd>] [-o </var/www/html/latency>]" 1>&2; exit 1; }
@@ -47,26 +49,47 @@ database=$d
 graphsdir=$o
 
 
+### write log
+
+write_log()
+{
+    echo "`date '+%m/%d %H:%M:%S'` $1" >> $log
+}
+
+
+
 ### change to the script directory
 cd ${graphsdir}
 
+if [[ ! -d bin/ ]] ; then
 
+        mkdir -p bin
+        cp "$0" bin/
+fi
 
 if [[ ! -f  ${d} ]]; then
 
 	echo "Database not exists! Creating!"
 	echo
 	rrdtool create $database \
-	--step 180 \
+	--step 300 \
 	DS:pl:GAUGE:540:0:100 \
 	DS:rtt:GAUGE:540:0:10000000 \
 	RRA:MAX:0.5:1:500\
+
+	if [ $? == 0 ] ; then
+           write_log "Generating initial database for $hosttoping"
+        fi
 
 	echo "Adding CRON Job for user $USER"
         tmpfile=$(mktemp)
         crontab -l >"$tmpfile"
         printf '%s\n' "*/5 * * * * $graphsdir/bin/latency_gen.sh -h $hosttoping -d $database -o $graphsdir 2>/dev/null" >>"$tmpfile"
         crontab "$tmpfile" && rm -f "$tmpfile"
+
+	if [ $? == 0 ] ; then
+           write_log "Added cron job for $hosttoping"
+        fi
 fi
 
 
@@ -91,13 +114,20 @@ get_data() {
  
 ### collect the data
 get_data $hosttoping
- 
+
+if [ $? == 0 ] ; then
+write_log "Collected host data for $hosttoping"
+fi
+
 ### update the database
 $rrdtool update $database --template pl:rtt N:$RETURN_DATA
 
+if [ $? == 0 ] ; then
+write_log "Updating database for $hosttoping"
+fi
 
 ## Graph for last 24 hours
-/usr/bin/rrdtool graph $hosttoping.png \
+/usr/bin/rrdtool graph $hosttoping-day.png \
 -w 785 -h 120 -a PNG \
 --slope-mode \
 --start -86400 --end now \
@@ -116,7 +146,7 @@ CDEF:PL10=packetloss,1,10,LIMIT,UN,UNKN,INF,IF \
 CDEF:PL25=packetloss,10,25,LIMIT,UN,UNKN,INF,IF \
 CDEF:PL50=packetloss,25,50,LIMIT,UN,UNKN,INF,IF \
 CDEF:PL100=packetloss,50,100,LIMIT,UN,UNKN,INF,IF \
-LINE1:roundtrip#0000FF:"latency(ms)" \
+AREA:roundtrip#AFE1AF:"latency(ms)" \
 GPRINT:roundtrip:LAST:"Cur\: %5.2lf" \
 GPRINT:roundtrip:AVERAGE:"Avg\: %5.2lf" \
 GPRINT:roundtrip:MAX:"Max\: %5.2lf" \
@@ -128,3 +158,60 @@ AREA:PL25#FFCC00:"10-25%":STACK \
 AREA:PL50#FF8000:"25-50%":STACK \
 AREA:PL100#FF0000:"50-100%":STACK
 
+if [ $? == 0 ] ; then
+write_log "Generating graphs for $hosttoping"
+fi	
+
+
+gen_index() {
+
+graphs=`ls *.png`
+
+### delete current index
+
+rm index.html
+
+cat <<EOF >index.html
+<HTML>
+<HEAD><TITLE>Latency Statistics</TITLE>
+<meta http-equiv=refresh content=30>
+</HEAD>
+<BODY>
+        <center><H1>LATENCY - Ping statistics</H1></center>
+<br>
+<center>
+<table>
+<td>
+EOF
+
+for item in $graphs
+do
+
+cat <<EOF >>index.html
+<tr>
+        <td><img src=http://$bind/`basename $graphsdir`/$item alt="alt text" ></td>
+</tr>
+EOF
+
+
+done
+
+
+cat <<EOF >>index.html
+</td>
+</table>
+</center>
+<br>
+EOF
+
+}
+
+
+if { set -C; 2>/dev/null >latency_gen.lock; }; then
+	echo "Generating index"
+	gen_index
+	trap "rm -f latency_gen.lock" EXIT
+   else
+        echo "Lock file exists… exiting"
+        exit 0
+fi
