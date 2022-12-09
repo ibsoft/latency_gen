@@ -147,6 +147,8 @@ CDEF:PL25=packetloss,10,25,LIMIT,UN,UNKN,INF,IF \
 CDEF:PL50=packetloss,25,50,LIMIT,UN,UNKN,INF,IF \
 CDEF:PL100=packetloss,50,100,LIMIT,UN,UNKN,INF,IF \
 AREA:roundtrip#AFE1AF:"latency(ms)" \
+LINE1:roundtrip#CC3118 \
+LINE1:roundtrip#CC7016 \
 GPRINT:roundtrip:LAST:"Cur\: %5.2lf" \
 GPRINT:roundtrip:AVERAGE:"Avg\: %5.2lf" \
 GPRINT:roundtrip:MAX:"Max\: %5.2lf" \
@@ -173,24 +175,54 @@ rm index.html
 
 cat <<EOF >index.html
 <HTML>
-<HEAD><TITLE>Latency Statistics</TITLE>
-<meta http-equiv=refresh content=30>
-</HEAD>
-<BODY>
-        <center><H1>LATENCY - Ping statistics</H1></center>
-<br>
-<center>
-<table>
-<td>
+  <HEAD>
+     <TITLE>LATENCY _> Statistics</TITLE>
+    <meta http-equiv=refresh content=30>
+    <link href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.0/css/bootstrap.min.css" rel="stylesheet" id="bootstrap-css">
+    <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.0/js/bootstrap.min.js"></script>
+    <script src="//code.jquery.com/jquery-1.11.1.min.js"></script>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+    <style>
+      table {
+        border-collapse: separate;
+        border-spacing: 0 15px;
+      }
+
+      th {
+        background-color: #4287f5;
+        color: white;
+      }
+
+      th,
+      td {
+        width: 150px;
+        text-align: center;
+        padding: 5px;
+      }
+
+      h2 {
+        color: #4287f5;
+      }
+    </style>
+  </HEAD>
+  <BODY style="background-color: #F5F5F5;">
+    <div class="jumbotron-fluid">
+            <h2 class="text-center">Latency <a href="#" target="_blank" class="text-success">Statistics</a>
+      </h2>
+      <center>
+        <table style="border-spacing: 5px 10px;">
+          <td>
+            <tr>
+
 EOF
 
 for item in $graphs
 do
 
 cat <<EOF >>index.html
-<tr>
-        <td><img src=http://$bind/`basename $graphsdir`/$item alt="alt text" ></td>
-</tr>
+	     <tr>
+                 <td><img src=http://$bind/`basename $graphsdir`/$item alt="alt text" ></td>
+	    </tr>
 EOF
 
 
@@ -198,10 +230,14 @@ done
 
 
 cat <<EOF >>index.html
-</td>
-</table>
-</center>
-<br>
+          </tr>
+          </td>
+        </table>
+      </center>
+    </div>
+  </BODY>
+</HTML>
+
 EOF
 
 }
